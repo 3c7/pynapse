@@ -69,6 +69,9 @@ class Pynapse(object):
         self.ssl = ssl
         self._login(password)
 
+    def __repr__(self):
+        return f"<Pynapse url={self.url} user={self.user}>"
+
     def _login(self, password):
         """Send POST request to login API endpoint to authenticate the session."""
         response = self.session.post(self.url + "/api/v1/login", json={
