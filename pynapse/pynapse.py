@@ -84,6 +84,27 @@ class SynapseError(SynapseMessage):
         return f"<SynapseError error_type={self.error_type} error_message=\"{self.error_message}\">"
 
 
+class SynapsePrint(SynapseMessage):
+    """Represents a Synapse print message"""
+    message_content: str
+
+    @staticmethod
+    def from_string(message_string: str):
+        pass
+
+    @staticmethod
+    def from_message(message: SynapseMessage):
+        p = SynapsePrint()
+        p.message_content = message.message_content["mesg"]
+        return p
+
+    def __repr__(self):
+        return f"<SynapsePrint message_content={self.message_content}>"
+
+    def __str__(self):
+        return self.message_content
+
+
 class Pynapse(object):
     """Vertex Synapse HTTP API Wrapper"""
 
@@ -135,6 +156,8 @@ class Pynapse(object):
             return SynapseNode.from_message(m)
         elif m.message_type == "err":
             return SynapseError.from_message(m)
+        elif m.message_type == "print":
+            return SynapsePrint.from_message(m)
         return m
 
     def storm_raw(self, storm_query: str):
