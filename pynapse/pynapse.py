@@ -3,6 +3,7 @@ import json
 from pynapse.exceptions import AuthenticationError, HTTPError, SynapseStormError
 from ipaddress import ip_address
 from typing import Union
+from pymisp import PyMISP, MISPAttribute, MISPObject
 
 
 class SynapseMessage(object):
@@ -24,12 +25,14 @@ class SynapseMessage(object):
 
 class SynapseNode(SynapseMessage):
     """Synapse node object."""
-    node_type: str
-    node_value: str
-    parsed_value: str  # E.g. IP in a readable format
-    tags: dict
-    props: dict
-    raw: str
+
+    def __init__(self, node_type: str = None, node_value: str = None, parsed_value: str = None, props: dict = None,
+                 tags: dict = None):
+        self.node_type = node_type
+        self.node_value = node_value
+        self.parsed_value = parsed_value
+        self.props = props
+        self.tags = tags
 
     @staticmethod
     def from_string(message_string: str):
@@ -59,7 +62,7 @@ class SynapseNode(SynapseMessage):
         return f"<SynapseNode " \
                f"node_type={self.node_type} " \
                f"node_value={self.node_value} " \
-               f"parsed_value={self.parsed_value} " \
+               f"parsed_value={self.parsed_value or None} " \
                f"props={self.props} " \
                f"tags={self.tags}>"
 
@@ -108,15 +111,16 @@ class SynapsePrint(SynapseMessage):
 class Pynapse(object):
     """Vertex Synapse HTTP API Wrapper"""
 
-    def __init__(self, url, user, password, ssl=True):
+    def __init__(self, url, user, password, ssl=True, debug=False):
         self.session = requests.Session()
         self.url = url
         self.user = user
         self.ssl = ssl
+        self.debug = debug
         self._login(password)
 
     def __repr__(self):
-        return f"<Pynapse url={self.url} user={self.user}>"
+        return f"<Pynapse url={self.url} user={self.user} debug={self.debug}>"
 
     def _login(self, password):
         """Send POST request to login API endpoint to authenticate the session."""
@@ -189,7 +193,7 @@ class Pynapse(object):
                 n = message
         return n
 
-    def delete_node(self, node_or_type: Union[SynapseNode, str], node_value:str = None) -> bool:
+    def delete_node(self, node_or_type: Union[SynapseNode, str], node_value: str = None) -> bool:
         """Deletes a node"""
         b = False
         response = []
@@ -224,6 +228,18 @@ class Pynapse(object):
                 n = message
         return n
 
+    def get_nodes(self, query: str):
+        """Get multiple nodes by storm query."""
+        nodes = []
+        response = self.storm_raw_parsed(query)
+        for message in response:
+            if isinstance(message, SynapseError):
+                raise SynapseStormError(f"{message.error_type}: {message.error_message}")
+
+            if isinstance(message, SynapseNode):
+                nodes.append(message)
+        return nodes
+
     def add_tag_to_node(self, node: SynapseNode, tag: str):
         """Adds a tag to a given node, returns the node."""
         query = f"{node.node_type}={node.node_value} [+#{tag}]"
@@ -235,3 +251,44 @@ class Pynapse(object):
             if isinstance(message, SynapseNode):
                 return message
         raise KeyError(f"API response should contain a node, but hasn't: {response}")
+
+    def add_tags_to_node(self, node: SynapseNode, tags: list):
+        """Adds multiple tags to a node with a single query."""
+        query = f"{node.node_type}={node.node_value} ["
+        for tag in tags:
+            query += f" +#{tag} "
+        query += "]"
+        response = self.storm_raw_parsed(query)
+        for message in response:
+            if isinstance(message, SynapseError):
+                raise SynapseStormError(f"{message.error_type}: {message.error_message}")
+
+            if isinstance(message, SynapseNode):
+                return message
+        raise KeyError(f"API response should contain a node, but hasn't: {response}")
+
+    def add_nodes_from_misp_event(self, pymisp_instance: PyMISP, uuid: str, tags: list = []):
+        """Adds nodes from a given MISP event to Synapse - HEAVILY WIP"""
+        added_nodes = []
+        tagged_nodes = []
+        event = pymisp_instance.get_event(uuid, pythonify=True)
+        for attrib in event.attributes:
+            if self.debug:
+                node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
+                print(f"Going to create node: {node_type}={node_value}")
+                added_nodes.append(self.add_node(node_type, node_value))
+        if len(tags) > 0:
+            for node in added_nodes:
+                if self.debug:
+                    print(f"Adding tags {tags} to {node}")
+                tagged_nodes.append(self.add_tags_to_node(node, tags))
+        return added_nodes
+
+    def _misp_attribute_to_type_and_value(self, attribute: MISPAttribute):
+        if attribute.type in ["ip-dst", "ip-src"]:
+            node_type = "inet:ipv4"
+        elif attribute.type in ["domain", "hostname"]:
+            node_type = "inet:fqdn"
+        else:
+            raise TypeError("MISP attribute type currently not supported.")
+        return node_type, attribute.value

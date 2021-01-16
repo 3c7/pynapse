@@ -18,7 +18,7 @@ setup(
     keywords='threat intelligence vertex synapse cortex',
     packages=find_packages(),
     install_requires=[
-        'requests'
+        'requests', 'pymisp'
     ],
     # Todo
     entry_points={}
