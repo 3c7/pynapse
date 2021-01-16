@@ -2,15 +2,16 @@ import requests
 import json
 from pynapse.exceptions import AuthenticationError, HTTPError, SynapseStormError
 from ipaddress import ip_address
+from typing import Union
 
 
 class SynapseMessage(object):
+    """Generic synapse message object for HTTP API responses."""
     message_type: str
     message_content: dict
 
     @staticmethod
     def from_string(message_string: str):
-        """Create a list of message objects from a HTTP API response"""
         m = SynapseMessage()
         data = json.loads(message_string)
         m.message_type = data[0]
@@ -22,8 +23,10 @@ class SynapseMessage(object):
 
 
 class SynapseNode(SynapseMessage):
+    """Synapse node object."""
     node_type: str
     node_value: str
+    parsed_value: str  # E.g. IP in a readable format
     tags: dict
     props: dict
     raw: str
@@ -46,12 +49,18 @@ class SynapseNode(SynapseMessage):
         return n
 
     def process_value(self):
-        """Processes node value."""
+        """Parses a node's value and adds it as parsed_value property."""
         if self.node_type == "inet:ipv4":
-            self.node_value = str(ip_address(self.node_value))
+            self.parsed_value = str(ip_address(self.node_value))
+        else:
+            self.parsed_value = ""
 
     def __repr__(self):
-        return f"<SynapseNode node_type={self.node_type} node_value={self.node_value} props={self.props} " \
+        return f"<SynapseNode " \
+               f"node_type={self.node_type} " \
+               f"node_value={self.node_value} " \
+               f"parsed_value={self.parsed_value} " \
+               f"props={self.props} " \
                f"tags={self.tags}>"
 
 
@@ -157,10 +166,20 @@ class Pynapse(object):
                 n = message
         return n
 
-    def delete_node(self, node_type, node_value) -> bool:
+    def delete_node(self, node_or_type: Union[SynapseNode, str], node_value:str = None) -> bool:
         """Deletes a node"""
         b = False
-        response = self.storm_raw_parsed(f"{node_type}={node_value} | delnode")
+        response = []
+
+        if isinstance(node_or_type, SynapseNode):
+            response = self.storm_raw_parsed(f"{node_or_type.node_type}={node_or_type.node_value} | delnode")
+        elif isinstance(node_or_type, str):
+            if not node_value:
+                raise ValueError("node_value must be given.")
+            response = self.storm_raw_parsed(f"{node_or_type}={node_value} | delnode")
+        else:
+            TypeError("node_or_type is not SynapseNode or str.")
+
         for message in response:
             if isinstance(message, SynapseError):
                 raise SynapseStormError(f"{message.error_type}: {message.error_message}")
@@ -169,3 +188,27 @@ class Pynapse(object):
                 b = True
         return b
 
+    def get_node(self, node_type, node_value):
+        """Retrieves a node"""
+        n = None
+        query = f"{node_type}={node_value}"
+        response = self.storm_raw_parsed(query)
+        for message in response:
+            if isinstance(message, SynapseError):
+                raise SynapseStormError(f"{message.error_type}: {message.error_message}")
+
+            if isinstance(message, SynapseNode):
+                n = message
+        return n
+
+    def add_tag_to_node(self, node: SynapseNode, tag: str):
+        """Adds a tag to a given node, returns the node."""
+        query = f"{node.node_type}={node.node_value} [+#{tag}]"
+        response = self.storm_raw_parsed(query)
+        for message in response:
+            if isinstance(message, SynapseError):
+                raise SynapseStormError(f"{message.error_type}: {message.error_message}")
+
+            if isinstance(message, SynapseNode):
+                return message
+        raise KeyError(f"API response should contain a node, but hasn't: {response}")

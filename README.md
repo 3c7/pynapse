@@ -17,13 +17,27 @@ from pynapse import Pynapse
 p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
 n = p.add_node("inet:fqdn", "github.com")
 print(n)
+# Eiter
 p.delete_node("inet:fqdn", "github.com")
+# Or
+p.delete_node(n)
 ```
 ```
 <SynapseNode node_type=inet:fqdn node_value=github.com props={'.created': 1610747280973, 'host': 'github', 'domain': 'com', 'issuffix': 0, 'iszone': 1, 'zone': 'github.com'} tags={}>
 True
 ```
 
+## Add Tag to Nodes
+```python
+from pynapse import Pynapse
+p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
+node = p.add_node("inet:url", "https://raw.githubusercontent.com/malicious_user_1234/project/template.dotm")
+node = p.add_tag_to_node(node, "ttp.mitre.t1221")
+print(node)
+```
+```
+<SynapseNode node_type=inet:url node_value=https://raw.githubusercontent.com/malicious_user_1234/project/template.dotm parsed_value= props={'.created': 1610800865521, 'proto': 'https', 'path': '/malicious_user_1234/project/tempalte.dotm', 'params': '', 'fqdn': 'raw.githubusercontent.com', 'port': 443, 'base': 'https://raw.githubusercontent.com/malicious_user_1234/project/tempalte.dotm'} tags={'ttp': [None, None], 'ttp.mitre': [None, None], 'ttp.mitre.t1221': [None, None]}>
+```
 ## Raw Storm commands
 ```python
 from pynapse import Pynapse
