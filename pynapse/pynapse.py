@@ -4,6 +4,7 @@ from pynapse.exceptions import AuthenticationError, HTTPError, SynapseStormError
 from ipaddress import ip_address
 from typing import Union
 from pymisp import PyMISP, MISPAttribute, MISPObject
+from datetime import datetime
 
 
 class SynapseMessage(object):
@@ -134,6 +135,11 @@ class Pynapse(object):
         if data["status"] != "ok":
             raise AuthenticationError(response.text)
 
+    def _debug(self, s):
+        """Prints debug message"""
+        if self.debug:
+            print(f"[DEBU][{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}] {s}")
+
     @staticmethod
     def _chop_messages(message_string: str):
         """Chops API responses"""
@@ -165,7 +171,7 @@ class Pynapse(object):
         return m
 
     def storm_raw(self, storm_query: str):
-        """Sends a custom storm query without further client side processing"""
+        """Sends a cufstom storm query without further client side processing"""
         response = self.session.get(
             self.url + "/api/v1/storm",
             json={
@@ -181,17 +187,29 @@ class Pynapse(object):
         message_strings = self._chop_messages(r)
         return [self._parse_message(message_string) for message_string in message_strings]
 
-    def add_node(self, node_type, node_value) -> SynapseNode:
-        """Adds a node without props and tags."""
-        n = None
-        response = self.storm_raw_parsed(f"[{node_type}={node_value}]")
+    def _add_node(self, ntype: str, nvalue: str, tags: list = None, **kwargs):
+        """Generic node adding function. Return node on success, raises SynapseStormError if Synapse responds with an
+        error and returns False if no node given in the Synapse response."""
+        query = f"[{ntype}={nvalue}"
+        for k, v in kwargs.items():
+            query += f" :{k}=\"{v}\""
+        if tags:
+            for tag in tags:
+                query += f" +#{tag}"
+        query += "]"
+        self._debug(f"Sending query: {query}")
+        response = self.storm_raw_parsed(query)
         for message in response:
             if isinstance(message, SynapseError):
                 raise SynapseStormError(f"{message.error_type}: {message.error_message}")
 
             if isinstance(message, SynapseNode):
-                n = message
-        return n
+                return message
+        return False
+
+    def add_node(self, node_type, node_value) -> SynapseNode:
+        """Adds a node without props and tags."""
+        return self._add_node(node_type, node_value)
 
     def delete_node(self, node_or_type: Union[SynapseNode, str], node_value: str = None) -> bool:
         """Deletes a node"""
@@ -240,6 +258,10 @@ class Pynapse(object):
                 nodes.append(message)
         return nodes
 
+    def add_tag(self, tag: str, title: str = None, doc: str = None):
+        """Adds a tag"""
+        return self._add_node("syn:tag", tag, title=title, doc=doc)
+
     def add_tag_to_node(self, node: SynapseNode, tag: str):
         """Adds a tag to a given node, returns the node."""
         query = f"{node.node_type}={node.node_value} [+#{tag}]"
@@ -273,14 +295,12 @@ class Pynapse(object):
         tagged_nodes = []
         event = pymisp_instance.get_event(uuid, pythonify=True)
         for attrib in event.attributes:
-            if self.debug:
-                node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
-                print(f"Going to create node: {node_type}={node_value}")
-                added_nodes.append(self.add_node(node_type, node_value))
+            node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
+            self._debug(f"Going to create node: {node_type}={node_value}")
+            added_nodes.append(self.add_node(node_type, node_value))
         if len(tags) > 0:
             for node in added_nodes:
-                if self.debug:
-                    print(f"Adding tags {tags} to {node}")
+                self._debug(f"Adding tags {tags} to {node}")
                 tagged_nodes.append(self.add_tags_to_node(node, tags))
         return added_nodes
 
