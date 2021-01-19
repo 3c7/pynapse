@@ -2,7 +2,7 @@ import requests
 import json
 from pynapse.exceptions import AuthenticationError, HTTPError, SynapseStormError
 from ipaddress import ip_address
-from typing import Union
+from typing import Union, Tuple
 from pymisp import PyMISP, MISPAttribute, MISPObject
 from datetime import datetime
 
@@ -187,10 +187,12 @@ class Pynapse(object):
         message_strings = self._chop_messages(r)
         return [self._parse_message(message_string) for message_string in message_strings]
 
-    def _add_node(self, ntype: str, nvalue: str, tags: list = None, **kwargs):
+    def _add_node(self, ntype: str, nvalue: str, tags: list = None, seen: Tuple[str, str] = None, **kwargs):
         """Generic node adding function. Return node on success, raises SynapseStormError if Synapse responds with an
         error and returns False if no node given in the Synapse response."""
         query = f"[{ntype}={nvalue}"
+        if seen:
+            query += f" .seen=({seen[0]},{seen[1]})"
         for k, v in kwargs.items():
             query += f" :{k}=\"{v}\""
         if tags:
@@ -297,7 +299,13 @@ class Pynapse(object):
         for attrib in event.attributes:
             node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
             self._debug(f"Going to create node: {node_type}={node_value}")
-            added_nodes.append(self.add_node(node_type, node_value))
+            fs, ls = None, None
+            if attrib.first_seen:
+                fs = attrib.first_seen.strftime("%Y-%m-%d %H:%M:%S")
+            if attrib.last_seen:
+                ls = attrib.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+            seen = (fs if fs else ls, ls if ls else fs)
+            added_nodes.append(self._add_node(node_type, node_value, seen=seen))
         if len(tags) > 0:
             for node in added_nodes:
                 self._debug(f"Adding tags {tags} to {node}")
