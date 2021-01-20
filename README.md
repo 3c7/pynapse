@@ -5,7 +5,7 @@ Pre alpha stage HTTP API client for [Vertex Synapse](https://github.com/vertexpr
 ## Login
 ```python
 from pynapse import Pynapse
-p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
+p = Pynapse("https://1.2.3.4:4443", "user", "password")
 print(p)
 ```
 ```
@@ -14,7 +14,7 @@ print(p)
 ## Add/Delete Nodes
 ```python
 from pynapse import Pynapse
-p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
+p = Pynapse("https://1.2.3.4:4443", "user", "password")
 n = p.add_node("inet:fqdn", "github.com")
 print(n)
 # Eiter
@@ -30,7 +30,7 @@ True
 ## Add Tag to Nodes
 ```python
 from pynapse import Pynapse
-p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
+p = Pynapse("https://1.2.3.4:4443", "user", "password")
 node = p.add_node("inet:url", "https://raw.githubusercontent.com/malicious_user_1234/project/template.dotm")
 node = p.add_tag_to_node(node, "ttp.mitre.t1221")
 print(node)
@@ -38,10 +38,23 @@ print(node)
 ```
 <SynapseNode node_type=inet:url node_value=https://raw.githubusercontent.com/malicious_user_1234/project/template.dotm parsed_value= props={'.created': 1610800865521, 'proto': 'https', 'path': '/malicious_user_1234/project/tempalte.dotm', 'params': '', 'fqdn': 'raw.githubusercontent.com', 'port': 443, 'base': 'https://raw.githubusercontent.com/malicious_user_1234/project/tempalte.dotm'} tags={'ttp': [None, None], 'ttp.mitre': [None, None], 'ttp.mitre.t1221': [None, None]}>
 ```
+
+## Add Blog posts
+*Note: This just creates media:news node. No IOCs importet.*
+```python
+from pynapse import Pynapse
+p = Pynapse("https://1.2.3.4:4443", "user", "password")
+node = p.add_news_from_url("https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/", tags=["aka.crowdstrike.mal.sunspot"])
+print(node)
+```
+```
+<SynapseNode node_type=media:news node_value=bc9abf1be59ffce180251d4cce755fe2 parsed_value=None props={'.created': 1611149307265, 'url:fqdn': 'www.crowdstrike.com', 'url': 'https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/', 'title': 'sunspot malware: a technical analysis | crowdstrike', 'summary': 'In this blog, we offer a technical analysis of SUNSPOT, malware that was deployed into the build environment to inject this backdoor into the SolarWinds Orion platform.'} tags={'aka': [None, None], 'aka.crowdstrike': [None, None], 'aka.crowdstrike.mal': [None, None], 'aka.crowdstrike.mal.sunspot': [None, None]}>
+```
+
 ## Raw Storm commands
 ```python
 from pynapse import Pynapse
-p = Pynapse("https://1.2.3.4:4443", "user", "password", ssl=False)
+p = Pynapse("https://1.2.3.4:4443", "user", "password")
 response = p.storm_raw_parsed("help")
 for message in response:
     print(message.__repr__()) # Print the representation of SynapsePrint objects

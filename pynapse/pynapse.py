@@ -1,5 +1,6 @@
 import requests
 import json
+from bs4 import BeautifulSoup
 from pynapse.exceptions import AuthenticationError, HTTPError, SynapseStormError
 from ipaddress import ip_address
 from typing import Union, Tuple
@@ -194,7 +195,8 @@ class Pynapse(object):
         if seen:
             query += f" .seen=({seen[0]},{seen[1]})"
         for k, v in kwargs.items():
-            query += f" :{k}=\"{v}\""
+            if v:
+                query += f" :{k}=\"{v}\""
         if tags:
             for tag in tags:
                 query += f" +#{tag}"
@@ -320,3 +322,24 @@ class Pynapse(object):
         else:
             raise TypeError("MISP attribute type currently not supported.")
         return node_type, attribute.value
+
+    def add_news_from_url(self, url: str, tags = []):
+        """Downloads website and tries to parse properties based on og-meta tags"""
+        response = requests.get(url)
+        if response.status_code > 201:
+            raise HTTPError(f"Got status code {response.status_code} for {url}.")
+        title, description = self._parse_og_title_description(response.text)
+        return self._add_node("media:news", "()", tags=tags, url=url, title=title, summary=description)
+
+    @staticmethod
+    def _parse_og_title_description(website_content: str):
+        """Extracts og meta tags for title and description"""
+        title, description = None, None
+        soup = BeautifulSoup(website_content, features="html.parser")
+        try:
+            title = soup.head.find("meta", property="og:title")["content"]
+            description = soup.head.find("meta", property="og:description")["content"]
+        except:
+            title = soup.head.title.contents[0]
+        return title, description
+
