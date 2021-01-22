@@ -342,4 +342,3 @@ class Pynapse(object):
         except:
             title = soup.head.title.contents[0]
         return title, description
-

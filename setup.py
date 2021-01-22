@@ -21,5 +21,9 @@ setup(
         'requests', 'pymisp'
     ],
     # Todo
-    entry_points={}
+    entry_points={
+        'console_scripts': {
+            'pynapse=pynapse.cli:main'
+        }
+    }
 )
