@@ -2,7 +2,7 @@ import io
 import os
 from argparse import ArgumentParser
 from yaml import load, dump, Loader, Dumper
-from pynapse.pynapse import Pynapse, SynapseNode
+from pynapse.pynapse import Pynapse, SynapseNode, SynapsePrint, SynapseError
 from urllib3 import disable_warnings
 
 global CONFIG
@@ -49,24 +49,32 @@ def storm(args):
     response = p.storm_raw_parsed(args.storm_query)
     tick, tock = response[0], response[-1]
     for node in response[1:-1]:
-        if not isinstance(node, SynapseNode):
-            continue
-        print(f"{node.node_type}={node.node_value}")
-        for prop, value in node.props.items():
-            if prop[0] == ".":
-                print(f"\t{prop}={value}")
-                continue
-            print(f"\t:{prop}={value}")
-        for tag, range in node.tags.items():
-            if not range[0] and not range[1]:
-                print(f"\t#{tag}")
-            else:
-                print(f"\t#{tag} ({range[0]}, {range[1]})")
+        if isinstance(node, SynapseNode):
+            print(f"{node.node_type}={node.node_value}")
+            for prop, value in node.props.items():
+                if prop[0] == ".":
+                    print(f"\t{prop}={value}")
+                    continue
+                print(f"\t:{prop}={value}")
+            for tag, range in node.tags.items():
+                if not range[0] and not range[1]:
+                    print(f"\t#{tag}")
+                else:
+                    print(f"\t#{tag} ({range[0]}, {range[1]})")
+            print("\n")
+        elif isinstance(node, SynapseError):
+            print(f"[ERROR] {node.error_type}: {node.error_message}")
+            exit(-1)
+        else:
+            print(node)
+    if args.verbose:
+        print(f"Query took {tock.message_content['took']} ms.")
 
 def main():
     load_config()
     parser = ArgumentParser(description="Pynypase cli")
-    parser.add_argument("--config", "-c", type=str, help="Alternative path to config file. Default is HOME/.syn/pynapse.py")
+    parser.add_argument("--config", "-c", type=str,
+                        help="Alternative path to config file. Default is HOME/.syn/pynapse.py")
     subparser = parser.add_subparsers(title="command", dest="command", required=True, help="Pynapse command")
 
     config_parser = subparser.add_parser("config")

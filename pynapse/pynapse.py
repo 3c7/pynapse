@@ -299,14 +299,23 @@ class Pynapse(object):
         tagged_nodes = []
         event = pymisp_instance.get_event(uuid, pythonify=True)
         for attrib in event.attributes:
-            node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
+            try:
+                node_type, node_value = self._misp_attribute_to_type_and_value(attrib)
+            except TypeError as te:
+                print(f"[ERROR] {te}")
+                continue
             self._debug(f"Going to create node: {node_type}={node_value}")
-            fs, ls = None, None
-            if attrib.first_seen:
-                fs = attrib.first_seen.strftime("%Y-%m-%d %H:%M:%S")
-            if attrib.last_seen:
-                ls = attrib.last_seen.strftime("%Y-%m-%d %H:%M:%S")
-            seen = (fs if fs else ls, ls if ls else fs)
+            fs, ls, seen = None, None, None
+            try:
+                if attrib.first_seen:
+                    fs = attrib.first_seen.strftime("%Y-%m-%d %H:%M:%S")
+                if attrib.last_seen:
+                    ls = attrib.last_seen.strftime("%Y-%m-%d %H:%M:%S")
+            except AttributeError:
+                # MISP attribute object has no first_seen/last_seen attribute
+                pass
+            if fs or ls:
+                seen = (fs if fs else ls, ls if ls else fs)
             added_nodes.append(self._add_node(node_type, node_value, seen=seen))
         if len(tags) > 0:
             for node in added_nodes:
@@ -319,8 +328,14 @@ class Pynapse(object):
             node_type = "inet:ipv4"
         elif attribute.type in ["domain", "hostname"]:
             node_type = "inet:fqdn"
+        elif attribute.type == "sha256":
+            node_type = "file:bytes"
+        elif attribute.type == "md5":
+            node_type = "hash:md5"
+        elif attribute.type == "sha1":
+            node_type = "hash:sha1"
         else:
-            raise TypeError("MISP attribute type currently not supported.")
+            raise TypeError(f"MISP attribute type {attribute.type} currently not supported.")
         return node_type, attribute.value
 
     def add_news_from_url(self, url: str, tags = []):
